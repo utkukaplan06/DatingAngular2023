@@ -1,9 +1,14 @@
+using System.Text;
 using API.Data;
 using API.Data.Migrations;
+using API.Entities;
 using API.Interfaces;
 using API.Middleware;
 using API.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +24,20 @@ builder.Services.AddDbContext<DataContext>(opt =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddCors();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options => 
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuerSigningKey = true,
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["TokenKey"])),
+                        ValidateIssuer = false,
+                        ValidateAudience = false
+                    };
+                });
 
 //builder.Services.AddSwaggerGen();
 
@@ -39,6 +58,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors(x => x.AllowAnyHeader()
+   .AllowAnyMethod()
+   .AllowCredentials()
+   .WithOrigins("https://localhost:4200"));
+
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -49,6 +74,7 @@ var services = scope.ServiceProvider;
 try
 {
     var context = services.GetRequiredService<DataContext>();
+    var userManager = services.GetRequiredService<UserManager<AppUser>>();
     await context.Database.MigrateAsync();
     await Seed.SeedUsers(context);
 }
